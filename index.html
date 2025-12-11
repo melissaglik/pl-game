@@ -16,6 +16,8 @@
         .scroller::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
         @keyframes float { 0%, 100% { transform: translateY(0px) rotate(-6deg); } 50% { transform: translateY(-10px) rotate(-6deg); } }
         .floating-icon { animation: float 3s ease-in-out infinite; }
+        /* Select oku özelleştirme */
+        select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); background-position: right 0.5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; }
     </style>
 </head>
 <body class="bg-slate-50 h-screen overflow-hidden">
@@ -35,6 +37,7 @@
         const SkipForward = (props) => <IconBase {...props}><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></IconBase>;
         const Undo2 = (props) => <IconBase {...props}><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></IconBase>;
         const Timer = (props) => <IconBase {...props}><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></IconBase>;
+        const Briefcase = (props) => <IconBase {...props}><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconBase>;
 
         // --- VERİ YAPISI ---
         const P_L_DATA = [
@@ -54,18 +57,20 @@
             { id: 14, label: 'EBIT', color: 'bg-black', txt: 'text-white' }
         ];
 
+        // --- DEPARTMAN LİSTESİ ---
+        const DEPARTMENTS = ['MK', 'PCS', 'BA', 'SM', 'GDS', 'Other'];
+
         // --- ESNEK GRUPLAMA KURALLARI ---
-        // Hangi kutuya (Key) hangi ID'ler (Value) gelirse doğru sayılacak?
         const VALID_GROUPS = {
             1: [1],
-            2: [2, 3],          // 2. kutuya 2 veya 3 gelebilir
-            3: [2, 3],          // 3. kutuya 2 veya 3 gelebilir
+            2: [2, 3],
+            3: [2, 3],
             4: [4],
-            5: [5, 6, 7],       // 5, 6, 7 yer değiştirebilir
+            5: [5, 6, 7],
             6: [5, 6, 7],
             7: [5, 6, 7],
             8: [8],
-            9: [9, 10, 11, 12], // 9, 10, 11, 12 yer değiştirebilir
+            9: [9, 10, 11, 12],
             10: [9, 10, 11, 12],
             11: [9, 10, 11, 12],
             12: [9, 10, 11, 12],
@@ -74,13 +79,16 @@
         };
 
         // 🚨 ÖNEMLİ: BURAYI KENDİ APPS SCRİPT URL'Sİ İLE DEĞİŞTİRİN!
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyegzD4aR5jloGG0Aqzwbd18yR1H2PcrBsXyl8Am7EHUP_t07IWwCTjefSipstNU5Lq/exec';
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykeHKVZObvVNl_lrKUStwtSDVnkTXwnYhzaVt5XNLhwrJnVlgYso19qOs2Hk4aCpKQ/exec';
 
         const PLMatchGame = () => {
             const [gameStarted, setGameStarted] = React.useState(false);
             const [showLeaderboard, setShowLeaderboard] = React.useState(false);
             const [leaderboardData, setLeaderboardData] = React.useState([]);
+            
+            // Kullanıcı Bilgileri
             const [nickname, setNickname] = React.useState('');
+            const [department, setDepartment] = React.useState(''); // Yeni Eklendi
             
             const [queue, setQueue] = React.useState([]);
             const [userAnswers, setUserAnswers] = React.useState({});
@@ -100,7 +108,8 @@
             };
 
             const handleStartGame = () => {
-                if (nickname.trim()) {
+                // Hem Nickname hem Departman seçiliyse başla
+                if (nickname.trim() && department) {
                     setGameStarted(true);
                     resetGame();
                 }
@@ -157,7 +166,6 @@
                 let correct = 0;
                 P_L_DATA.forEach(item => { 
                     const userAnswer = answers[item.id];
-                    // ESNEK KONTROL: Kullanıcının cevabı, o slotun kabul ettiği grupta var mı?
                     if (userAnswer && VALID_GROUPS[item.id].includes(userAnswer.id)) {
                         correct++;
                     }
@@ -179,6 +187,7 @@
                         body: JSON.stringify({
                             timestamp: new Date().toISOString(),
                             nickname: nickname,
+                            department: department, // Departman bilgisini de gönderiyoruz
                             correctAnswers: correct,
                             score: scoreValue,
                             time: formatTime(elapsedTime),
@@ -208,34 +217,53 @@
 
                         <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl shadow-orange-900/30 p-8 sm:p-10 max-w-md w-full relative z-10 border-b-4 border-orange-600">
                             
-                            {/* --- B/S/H/ LOGOSU (SİYAH & NET) --- */}
-                            <div className="text-center mb-10 select-none">
+                            <div className="text-center mb-8 select-none">
                                 <h1 className="text-7xl sm:text-8xl text-black tracking-tighter" 
                                     style={{ fontFamily: 'Arial, "Helvetica Neue", Helvetica, sans-serif', fontWeight: '400' }}>
                                     B/S/H/
                                 </h1>
                             </div>
                             
-                            <div className="text-center mb-10">
+                            <div className="text-center mb-8">
                                 <div className="inline-block bg-gradient-to-tr from-orange-600 to-orange-400 p-5 rounded-2xl mb-4 shadow-lg shadow-orange-500/50 floating-icon">
                                     <Trophy size={48} className="text-white drop-shadow-md" strokeWidth={2.5} />
                                 </div>
-                                <h1 className="text-4xl font-black text-slate-900 mb-3 tracking-tight">Mix & Match</h1>
-                                <div className="inline-block bg-orange-100 text-orange-800 px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-wider shadow-sm">
+                                <h1 className="text-3xl sm:text-4xl font-black text-slate-900 mb-2 tracking-tight">Mix & Match</h1>
+                                <div className="inline-block bg-orange-100 text-orange-800 px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold uppercase tracking-wider shadow-sm">
                                     P&L Structure Game
                                 </div>
                             </div>
                             
-                            <div className="mb-6 relative group">
-                                <div className="absolute inset-0 bg-orange-200 rounded-xl blur-md opacity-0 group-hover:opacity-70 transition-opacity duration-300 -z-10"></div>
-                                <input type="text" value={nickname} onChange={(e) => setNickname(e.target.value)}
-                                    placeholder="Nickname"
-                                    className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/20 outline-none transition-all font-bold text-slate-800 text-center text-lg placeholder:text-slate-400 placeholder:font-semibold shadow-sm group-hover:shadow-md" 
-                                    maxLength={15}
-                                />
+                            {/* --- FORM ALANI --- */}
+                            <div className="space-y-4 mb-6">
+                                {/* Nickname Input */}
+                                <div className="relative group">
+                                    <div className="absolute inset-0 bg-orange-200 rounded-xl blur-md opacity-0 group-hover:opacity-70 transition-opacity duration-300 -z-10"></div>
+                                    <input type="text" value={nickname} onChange={(e) => setNickname(e.target.value)}
+                                        placeholder="İsim / Nickname"
+                                        className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/20 outline-none transition-all font-bold text-slate-800 text-center text-lg placeholder:text-slate-400 placeholder:font-semibold shadow-sm" 
+                                        maxLength={15}
+                                    />
+                                </div>
+
+                                {/* Department Dropdown */}
+                                <div className="relative group">
+                                    <div className="absolute inset-0 bg-blue-200 rounded-xl blur-md opacity-0 group-hover:opacity-70 transition-opacity duration-300 -z-10"></div>
+                                    <select value={department} onChange={(e) => setDepartment(e.target.value)}
+                                        className={`w-full px-6 py-4 bg-slate-50 border-2 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/20 outline-none transition-all font-bold text-center text-lg shadow-sm cursor-pointer appearance-none ${department ? 'text-slate-800 border-slate-200' : 'text-slate-400 border-slate-200'}`}>
+                                        <option value="" disabled>Departman Seçiniz...</option>
+                                        {DEPARTMENTS.map(d => (
+                                            <option key={d} value={d} className="text-slate-800 font-semibold">{d}</option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                                        <Briefcase size={20} />
+                                    </div>
+                                </div>
                             </div>
                             
-                            <button onClick={handleStartGame} disabled={!nickname.trim()}
+                            {/* Başla Butonu (Sadece ikisi de doluysa aktif) */}
+                            <button onClick={handleStartGame} disabled={!nickname.trim() || !department}
                                 className="w-full py-4 bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 hover:from-orange-600 hover:to-orange-800 text-white rounded-xl font-black text-xl transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-3 mb-4 shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:scale-[1.02] active:scale-[0.98] relative z-10 group">
                                 <Play size={28} fill="currentColor" className="group-hover:animate-bounce" /> BAŞLA
                             </button>
@@ -253,7 +281,10 @@
                                         <div key={i} className="flex justify-between items-center py-2 border-b border-orange-200/50 last:border-0">
                                             <div className="flex items-center gap-2">
                                                 <span className={`flex items-center justify-center w-6 h-6 rounded-full font-bold text-xs ${i===0?'bg-yellow-400 text-yellow-900':i===1?'bg-slate-300 text-slate-700':i===2?'bg-orange-300 text-orange-800':'bg-orange-100 text-orange-600'}`}>{i+1}</span>
-                                                <span className="font-semibold text-slate-700 truncate max-w-[120px]">{e.nickname}</span>
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold text-slate-700 truncate max-w-[120px]">{e.nickname}</span>
+                                                    {e.department && <span className="text-[10px] text-slate-500 font-bold uppercase">{e.department}</span>}
+                                                </div>
                                             </div>
                                             <span className="font-black text-orange-600">{e.score}</span>
                                         </div>
@@ -272,7 +303,10 @@
                     <div className="bg-white shadow-sm px-4 py-3 flex items-center justify-between z-10 shrink-0 border-b border-slate-200">
                         <div className="flex items-center gap-2">
                             <span className="font-black text-slate-900 text-lg hidden sm:inline tracking-tight">Mix & Match</span>
-                            <span className="bg-orange-100 px-2.5 py-1 rounded-full text-sm text-orange-800 font-bold border border-orange-200">👤 {nickname}</span>
+                            <div className="flex flex-col items-end leading-none">
+                                <span className="bg-orange-100 px-2.5 py-1 rounded-full text-sm text-orange-800 font-bold border border-orange-200">👤 {nickname}</span>
+                                <span className="text-[10px] text-slate-400 font-bold mr-1 mt-0.5">{department}</span>
+                            </div>
                         </div>
                         <div className="flex items-center gap-3">
                             <div className="flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-1.5 rounded-md font-mono text-sm font-bold border border-slate-200">
@@ -296,7 +330,6 @@
 
                                         if (gameFinished) {
                                             if (isFilled) {
-                                                // RENK KONTROLÜ (ESNEK)
                                                 isCorrect = VALID_GROUPS[item.id].includes(userAnswer.id);
                                                 baseClass = isCorrect ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200";
                                             }
@@ -393,5 +426,3 @@
     </script>
 </body>
 </html>
-
-
