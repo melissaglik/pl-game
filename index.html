@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P&L Mix & Match Game V5 - Google Sheet Ready</title>
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-tap-highlight-color: transparent; }
+        .scroller::-webkit-scrollbar { width: 4px; }
+        .scroller::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
+        @keyframes float { 0%, 100% { transform: translateY(0px) rotate(-6deg); } 50% { transform: translateY(-10px) rotate(-6deg); } }
+        .floating-icon { animation: float 3s ease-in-out infinite; }
+    </style>
+</head>
+<body class="bg-slate-50 h-screen overflow-hidden">
+    <div id="root" class="h-full"></div>
+
+    <script type="text/babel">
+        // --- İKONLAR ---
+        const IconBase = ({ size = 24, className = "", children, ...props }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>{children}</svg>
+        );
+        const Trophy = (props) => <IconBase {...props}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></IconBase>;
+        const RotateCcw = (props) => <IconBase {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></IconBase>;
+        const Check = (props) => <IconBase {...props}><polyline points="20 6 9 17 4 12"/></IconBase>;
+        const X = (props) => <IconBase {...props}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></IconBase>;
+        const Play = (props) => <IconBase {...props}><polygon points="6 3 20 12 6 21 6 3"/></IconBase>;
+        const Award = (props) => <IconBase {...props}><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></IconBase>;
+        const SkipForward = (props) => <IconBase {...props}><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></IconBase>;
+        const Undo2 = (props) => <IconBase {...props}><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></IconBase>;
+        const Timer = (props) => <IconBase {...props}><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></IconBase>;
+
+        // --- VERİ YAPISI ---
+        const P_L_DATA = [
+            { id: 1, label: 'Sales Quantity', color: 'bg-slate-200' },
+            { id: 2, label: 'Turnover Gross', color: 'bg-slate-200' },
+            { id: 3, label: 'Sales Deductions', color: 'bg-slate-200' },
+            { id: 4, label: 'Turnover Net', color: 'bg-black', txt: 'text-white' },
+            { id: 5, label: 'Var. Factory Costs', color: 'bg-orange-200' },
+            { id: 6, label: 'Var. Costs Sales', color: 'bg-orange-200' },
+            { id: 7, label: 'Var. Cost Logistic', color: 'bg-orange-200' },
+            { id: 8, label: 'Contribution Margin I', color: 'bg-orange-600', txt: 'text-white' },
+            { id: 9, label: 'Fixed Factory Costs', color: 'bg-slate-200' },
+            { id: 10, label: 'SG&A local regional', color: 'bg-slate-200' },
+            { id: 11, label: 'Development', color: 'bg-slate-200' },
+            { id: 12, label: 'SG&A Global', color: 'bg-slate-200' },
+            { id: 13, label: 'Due Date Effects', color: 'bg-slate-200' },
+            { id: 14, label: 'EBIT', color: 'bg-black', txt: 'text-white' }
+        ];
+
+        // 🚨 ÖNEMLİ: BURAYI KENDİ OLUŞTURDUĞUNUZ APPS SCRİPT URL'Sİ İLE DEĞİŞTİRİN!
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyegzD4aR5jloGG0Aqzwbd18yR1H2PcrBsXyl8Am7EHUP_t07IWwCTjefSipstNU5Lq/exec';
+
+        const PLMatchGame = () => {
+            const [gameStarted, setGameStarted] = React.useState(false);
+            const [showLeaderboard, setShowLeaderboard] = React.useState(false);
+            const [leaderboardData, setLeaderboardData] = React.useState([]);
+            const [nickname, setNickname] = React.useState('');
+            
+            const [queue, setQueue] = React.useState([]);
+            const [userAnswers, setUserAnswers] = React.useState({});
+            const [history, setHistory] = React.useState([]);
+            const [gameFinished, setGameFinished] = React.useState(false);
+            const [score, setScore] = React.useState(0);
+            const [correctCount, setCorrectCount] = React.useState(0);
+            const [elapsedTime, setElapsedTime] = React.useState(0);
+            const timerRef = React.useRef(null);
+
+            const fetchLeaderboard = async () => {
+                try {
+                    // Skor tablosu için ayrı bir URL gerekebilir, şimdilik placeholder kullanılıyor
+                    const response = await fetch('https://script.google.com/macros/s/AKfycbwVqE_bAqDr7FBZn5zNz0tNVJAi1YXy5PxkKF6Yw15ueP5bqmwVl29Jyx2u5_dPMhY/exec');
+                    const data = await response.json();
+                    setLeaderboardData(data.sort((a, b) => b.score - a.score).slice(0, 10));
+                } catch (error) { console.log(error); }
+            };
+
+            const handleStartGame = () => {
+                if (nickname.trim()) {
+                    setGameStarted(true);
+                    resetGame();
+                }
+            };
+
+            const resetGame = () => {
+                const shuffled = [...P_L_DATA].sort(() => Math.random() - 0.5);
+                setQueue(shuffled);
+                setUserAnswers({});
+                setHistory([]);
+                setGameFinished(false);
+                setScore(0);
+                setCorrectCount(0);
+                setElapsedTime(0);
+                if (timerRef.current) clearInterval(timerRef.current);
+                timerRef.current = setInterval(() => { setElapsedTime(prev => prev + 1); }, 1000);
+            };
+
+            React.useEffect(() => {
+                if (gameFinished && timerRef.current) clearInterval(timerRef.current);
+                return () => clearInterval(timerRef.current);
+            }, [gameFinished]);
+
+            const handleSlotClick = (slotNumber) => {
+                if (gameFinished || userAnswers[slotNumber] || queue.length === 0) return;
+                const currentItem = queue[0];
+                const newAnswers = { ...userAnswers, [slotNumber]: currentItem };
+                setUserAnswers(newAnswers);
+                setHistory([...history, slotNumber]);
+                const newQueue = queue.slice(1);
+                setQueue(newQueue);
+                if (newQueue.length === 0) calculateScore(newAnswers);
+            };
+
+            const handleSkip = () => {
+                if (queue.length <= 1) return;
+                const current = queue[0];
+                const rest = queue.slice(1);
+                setQueue([...rest, current]);
+            };
+
+            const handleUndo = () => {
+                if (history.length === 0 || gameFinished) return;
+                const lastSlotId = history[history.length - 1];
+                const itemToReturn = userAnswers[lastSlotId];
+                const newAnswers = { ...userAnswers };
+                delete newAnswers[lastSlotId];
+                setUserAnswers(newAnswers);
+                setQueue([itemToReturn, ...queue]);
+                setHistory(history.slice(0, -1));
+            };
+
+            const calculateScore = (answers) => {
+                let correct = 0;
+                P_L_DATA.forEach(item => { if (answers[item.id] && answers[item.id].id === item.id) correct++; });
+                setCorrectCount(correct);
+                const calculatedScore = Math.round((correct / 14) * 100);
+                setScore(calculatedScore);
+                setGameFinished(true);
+                // Yeni Kayıt Fonksiyonu çağırılıyor
+                saveScoreToSheet(correct, calculatedScore);
+            };
+
+            const saveScoreToSheet = async (correct, scoreValue) => {
+                if (GOOGLE_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
+                    console.error("Lütfen GOOGLE_SCRIPT_URL'yi Apps Script URL'nizle değiştirin.");
+                    alert("Skor kaydedilemedi. Lütfen Apps Script URL'sini kontrol edin.");
+                    return;
+                }
+                
+                try {
+                    await fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST', 
+                        mode: 'no-cors', // CORS hatasını engeller
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            timestamp: new Date().toISOString(),
+                            nickname: nickname,
+                            correctAnswers: correct,
+                            score: scoreValue,
+                            time: formatTime(elapsedTime),
+                            totalQuestions: 14
+                        })
+                    });
+                } catch (e) {
+                    console.error("Veri gönderme hatası:", e);
+                }
+            };
+
+            const formatTime = (seconds) => {
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+            };
+
+            const currentItem = queue[0];
+
+            if (!gameStarted) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center p-4 overflow-hidden relative">
+                        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+                            <div className="absolute -top-20 -right-20 w-64 h-64 bg-orange-400 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-pulse"></div>
+                            <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-yellow-500 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-pulse delay-1000"></div>
+                        </div>
+
+                        <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl shadow-orange-900/30 p-8 sm:p-10 max-w-md w-full relative z-10 border-b-4 border-orange-600">
+                            {/* LOGO GÜNCELLENDİ: TAMAMEN SİYAH */}
+                            <div className="text-center mb-10">
+                                <div className="inline-flex items-center justify-center gap-1 text-5xl font-black text-slate-900 tracking-tighter">
+                                    <span>B</span><span className="text-slate-900/50">/</span>
+                                    <span>S</span><span className="text-slate-900/50">/</span>
+                                    <span>H</span>
+                                </div>
+                            </div>
+                            
+                            {/* Başlık ve İkon */}
+                            <div className="text-center mb-10">
+                                <div className="inline-block bg-gradient-to-tr from-orange-600 to-orange-400 p-5 rounded-2xl mb-4 shadow-lg shadow-orange-500/50 floating-icon">
+                                    <Trophy size={48} className="text-white drop-shadow-md" strokeWidth={2.5} />
+                                </div>
+                                <h1 className="text-4xl font-black text-slate-900 mb-3 tracking-tight">Mix & Match</h1>
+                                <div className="inline-block bg-orange-100 text-orange-800 px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-wider shadow-sm">
+                                    P&L Structure Game
+                                </div>
+                            </div>
+                            
+                            {/* Input */}
+                            <div className="mb-6 relative group">
+                                <div className="absolute inset-0 bg-orange-200 rounded-xl blur-md opacity-0 group-hover:opacity-70 transition-opacity duration-300 -z-10"></div>
+                                <input type="text" value={nickname} onChange={(e) => setNickname(e.target.value)}
+                                    placeholder="Nicknameniz..."
+                                    className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/20 outline-none transition-all font-bold text-slate-800 text-center text-lg placeholder:text-slate-400 placeholder:font-semibold shadow-sm group-hover:shadow-md" 
+                                    maxLength={15}
+                                />
+                            </div>
+                            
+                            {/* Başla Butonu */}
+                            <button onClick={handleStartGame} disabled={!nickname.trim()}
+                                className="w-full py-4 bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 hover:from-orange-600 hover:to-orange-800 text-white rounded-xl font-black text-xl transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-3 mb-4 shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:scale-[1.02] active:scale-[0.98] relative z-10 group">
+                                <Play size={28} fill="currentColor" className="group-hover:animate-bounce" /> BAŞLA
+                            </button>
+
+                            {/* Skorlar Butonu */}
+                             <button onClick={() => { setShowLeaderboard(!showLeaderboard); if (!showLeaderboard) fetchLeaderboard(); }}
+                                className="w-full py-3 bg-white border-2 border-orange-100 text-orange-700 rounded-xl font-bold hover:bg-orange-50 hover:border-orange-200 transition-all flex items-center justify-center gap-2 shadow-sm">
+                                <Award size={20} /> Skor Tablosu
+                            </button>
+
+                            {/* Leaderboard */}
+                            {showLeaderboard && (
+                                <div className="mt-6 bg-orange-50/80 rounded-xl p-4 max-h-52 overflow-y-auto border border-orange-100 text-sm scroller animate-in slide-in-from-bottom-4">
+                                    <h3 className="text-center font-bold text-orange-800 mb-3">🏆 En İyiler</h3>
+                                    {leaderboardData.length > 0 ? (
+                                        leaderboardData.map((e, i) => (
+                                        <div key={i} className="flex justify-between items-center py-2 border-b border-orange-200/50 last:border-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`flex items-center justify-center w-6 h-6 rounded-full font-bold text-xs ${i===0?'bg-yellow-400 text-yellow-900':i===1?'bg-slate-300 text-slate-700':i===2?'bg-orange-300 text-orange-800':'bg-orange-100 text-orange-600'}`}>{i+1}</span>
+                                                <span className="font-semibold text-slate-700 truncate max-w-[120px]">{e.nickname}</span>
+                                            </div>
+                                            <span className="font-black text-orange-600">{e.score}</span>
+                                        </div>
+                                        ))
+                                    ) : <div className="text-center text-orange-400 py-4 flex items-center justify-center gap-2"><div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin"></div> Yükleniyor...</div>}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            // --- OYUN EKRANI ---
+            return (
+                <div className="h-full bg-slate-100 flex flex-col font-sans">
+                    {/* Üst Bar */}
+                    <div className="bg-white shadow-sm px-4 py-3 flex items-center justify-between z-10 shrink-0 border-b border-slate-200">
+                        <div className="flex items-center gap-2">
+                            <span className="font-black text-slate-900 text-lg hidden sm:inline tracking-tight">Mix & Match</span>
+                            <span className="bg-orange-100 px-2.5 py-1 rounded-full text-sm text-orange-800 font-bold border border-orange-200">👤 {nickname}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-1.5 rounded-md font-mono text-sm font-bold border border-slate-200">
+                                <Timer size={16} /> {formatTime(elapsedTime)}
+                            </div>
+                            <button onClick={resetGame} className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-all rounded-md border border-slate-200 active:scale-95">
+                                <RotateCcw size={18} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Ana Alan */}
+                    <div className="flex-1 overflow-hidden p-2 sm:p-4 max-w-6xl mx-auto w-full">
+                        <div className="h-full grid grid-cols-12 gap-2 sm:gap-6">
+                            
+                            {/* SOL TARAF */}
+                            <div className="col-span-8 lg:col-span-7 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full overflow-hidden relative">
+                                <div className="p-2 overflow-y-auto scroller h-full space-y-1.5 relative z-10">
+                                    {P_L_DATA.map((item) => {
+                                        const userAnswer = userAnswers[item.id];
+                                        const isFilled = !!userAnswer;
+                                        let baseClass = "bg-white border-slate-100";
+                                        if (gameFinished) {
+                                            if (isFilled) baseClass = userAnswer.id === item.id ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200";
+                                        } else if (isFilled) {
+                                            baseClass = "bg-slate-50 border-slate-200 shadow-sm";
+                                        }
+
+                                        return (
+                                            <div key={item.id} onClick={() => handleSlotClick(item.id)}
+                                                className={`flex items-center p-1.5 sm:p-2 border-2 rounded-lg transition-all duration-200 group ${baseClass} ${!gameFinished && !isFilled && currentItem ? 'cursor-pointer hover:border-orange-400 hover:shadow-md hover:bg-orange-50/50 active:scale-[0.99]' : ''}`}>
+                                                <div className={`w-6 h-6 sm:w-8 sm:h-8 flex shrink-0 items-center justify-center rounded-md text-xs sm:text-sm font-bold mr-2 shadow-sm ${item.color} ${item.txt || 'text-slate-700'} group-hover:scale-105 transition-transform`}>
+                                                    {item.id}
+                                                </div>
+                                                <div className="flex-1 text-xs sm:text-sm leading-tight break-words pr-1">
+                                                    {isFilled ? (
+                                                        <span className={`font-bold ${gameFinished ? (userAnswer.id === item.id ? 'text-green-700' : 'text-red-700') : 'text-slate-800'}`}>
+                                                            {userAnswer.label}
+                                                        </span>
+                                                    ) : <span className="text-slate-300 italic font-medium">...</span>}
+                                                </div>
+                                                {gameFinished && isFilled && (
+                                                    <div className="shrink-0 animate-in zoom-in">
+                                                        {userAnswer.id === item.id ? <Check size={18} className="text-green-500 drop-shadow-sm"/> : <X size={18} className="text-red-500 drop-shadow-sm"/>}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* SAĞ TARAF */}
+                            <div className="col-span-4 lg:col-span-5 flex flex-col h-full">
+                                {!gameFinished ? (
+                                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-2 sm:p-6 flex flex-col items-center justify-center h-full relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 p-2 text-[10px] sm:text-sm text-slate-400 font-bold bg-slate-50 rounded-bl-xl border-b border-l border-slate-100">
+                                            {queue.length} Kalan
+                                        </div>
+
+                                        {currentItem ? (
+                                            <div className="w-full flex flex-col items-center gap-2 sm:gap-6 relative z-10">
+                                                {/* Kart */}
+                                                <div className="w-full aspect-[4/3] sm:aspect-video bg-gradient-to-br from-slate-800 to-slate-950 rounded-xl shadow-xl shadow-slate-900/20 flex flex-col items-center justify-center p-3 sm:p-8 text-center animate-in fade-in slide-in-from-right-4 duration-300 border-b-4 border-orange-500 group hover:scale-[1.02] transition-transform">
+                                                    <span className="text-orange-400 text-xs sm:text-sm font-bold mb-1 uppercase tracking-wider">Sıradaki Parça</span>
+                                                    <span className="text-white font-black text-sm sm:text-3xl leading-tight drop-shadow-lg">
+                                                        {currentItem.label}
+                                                    </span>
+                                                </div>
+
+                                                {/* Butonlar */}
+                                                <div className="flex flex-col sm:flex-row gap-2 w-full">
+                                                    <button onClick={handleUndo} disabled={history.length === 0}
+                                                        className="flex-1 py-3 sm:py-4 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-600 rounded-xl flex items-center justify-center gap-1 sm:gap-2 transition-all active:scale-95 font-bold border border-slate-200 hover:border-slate-300">
+                                                        <Undo2 size={20} />
+                                                        <span className="hidden sm:inline">Geri Al</span>
+                                                    </button>
+                                                    <button onClick={handleSkip} disabled={queue.length <= 1}
+                                                        className="flex-1 py-3 sm:py-4 bg-orange-50 hover:bg-orange-100 disabled:opacity-40 text-orange-700 rounded-xl flex items-center justify-center gap-1 sm:gap-2 transition-all active:scale-95 font-bold border border-orange-200 hover:border-orange-300">
+                                                        <SkipForward size={20} />
+                                                        <span className="hidden sm:inline">Pas Geç</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : <div className="text-sm font-bold text-slate-400 flex items-center gap-2"><div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div> Hazırlanıyor...</div>}
+                                    </div>
+                                ) : (
+                                    // OYUN SONU
+                                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-8 flex flex-col items-center justify-center h-full text-center animate-in zoom-in">
+                                        <div className="inline-block bg-yellow-100 p-4 rounded-full mb-4 shadow-lg shadow-yellow-200/50">
+                                            <Trophy size={40} className="text-yellow-500" fill="currentColor" />
+                                        </div>
+                                        <h3 className="text-2xl sm:text-3xl font-black text-slate-900 mb-1">Oyun Bitti!</h3>
+                                        <div className="text-5xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-orange-700 mb-4 drop-shadow-sm">
+                                            {score}
+                                        </div>
+                                        <div className="flex flex-wrap justify-center gap-3 text-sm font-bold text-slate-600 mb-6">
+                                            <div className="bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg flex items-center gap-2">
+                                                <Check size={16} className="text-green-500"/> {correctCount} Doğru
+                                            </div>
+                                            <div className="bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg flex items-center gap-2">
+                                                <Timer size={16} className="text-blue-500"/> {formatTime(elapsedTime)}
+                                            </div>
+                                        </div>
+                                        <button onClick={resetGame} className="w-full py-3 sm:py-4 bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-900 hover:to-black text-white rounded-xl text-sm sm:text-base font-black transition-all hover:scale-[1.02] active:scale-95 shadow-md flex items-center justify-center gap-2">
+                                            <RotateCcw size={20}/> Tekrar Oyna
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<PLMatchGame />);
+    </script>
+</body>
+</html>
